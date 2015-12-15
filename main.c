@@ -9,13 +9,13 @@
 typedef struct _node {
     int key;
     int value;
-    int next;
-    int previous;
-    struct _node* nextNode;
-    struct _node* prevNode;
+    struct _node* lhm_next;
+    struct _node* lhm_prev;
+    struct _node* ll_next;
+    struct _node* ll_prev;
 } Node;
 
-Node* initNode(int key, int value){
+Node* n_init(int key, int value){
     Node* n = (Node*)malloc(sizeof(Node));
     n->key = key;
     n->value = value;
@@ -28,30 +28,30 @@ typedef struct _linkedList {
     int size;
 } LinkedList;
 
-bool LL_Insert(LinkedList* ll, int key, int value){
+Node* ll_insert(LinkedList *ll, int key, int value){
     int i;
     if(ll->size==0){
-        Node* n = initNode(key,value);
+        Node* n = n_init(key, value);
         ll->first = n;
         ll->last = n;
         ll->size = 1;
-        return true;
+        return n;
     }
     Node* n = ll->first;
     do{
         if(n->key==key){
             n->value = value;
-            return false;
+            return n;
         }
-        n = n->nextNode;
+        n = n->ll_next;
     } while(n!=NULL);
-    n = initNode(key,value);
+    n = n_init(key, value);
     Node* last = ll->last;
-    last->nextNode = n;
-    n->prevNode = last;
+    last->ll_next = n;
+    n->ll_prev = last;
     ll->last = n;
     ll->size=ll->size+1;
-    return true;
+    return n;
 }
 
 Node* ll_get(LinkedList* ll, int key){
@@ -60,9 +60,27 @@ Node* ll_get(LinkedList* ll, int key){
         if(n->key==key){
             return n;
         }
-        n=n->nextNode;
+        n=n->ll_next;
     }
     return NULL;
+}
+
+bool ll_remove(LinkedList* ll, int key){
+    Node* n = ll_get(ll,key);
+    if(n==NULL) return false;
+    Node* prev = n->ll_prev;
+    Node* next = n->ll_next;
+    if(ll->first==n)
+        ll->first==next;
+    if(ll->last==n)
+        ll->last==prev;
+    if(prev!=NULL)
+        prev->ll_next = next;
+    if(next!=NULL)
+        next->ll_prev = prev;
+    ll->size--;
+    free(n);
+    return true;
 }
 
 void ll_destroy(LinkedList* ll){
@@ -70,7 +88,7 @@ void ll_destroy(LinkedList* ll){
     Node* n = ll->first;
     Node* next;
     while(n!=NULL){
-        next = n->nextNode;
+        next = n->ll_next;
         free(n);
         n=next;
     }
@@ -81,6 +99,9 @@ typedef struct _linkedHashMap {
     int Size;
     int MapSize;
     float alpha;
+    int MaxSize;
+    Node* mru;
+    Node* lru;
 } LinkedHashMap;
 
 void hello()
@@ -93,15 +114,16 @@ LinkedHashMap* lhm_init(int maxSize, float loadFactor)
     LinkedHashMap* f = malloc(sizeof(LinkedHashMap));
     f->Size=0;
     f->MapSize=(int)(maxSize/loadFactor);
+    f->MaxSize = maxSize;
     f->Hash = (LinkedList**)malloc(sizeof(LinkedList*)*f->MapSize);
     f->alpha = loadFactor;
     return f;
 }
 
-Node* lhm_get(LinkedHashMap *f, int key)
+Node* lhm_get(LinkedHashMap *lhm, int key)
 {
-    int i = hash(f,key);
-    LinkedList* ll = f->Hash[i];
+    int i = hash(lhm, key);
+    LinkedList* ll = lhm->Hash[i];
     return ll_get(ll,key);
 }
 
@@ -110,31 +132,23 @@ bool lhm_put(LinkedHashMap *lhm, int key, int value)
     int i = hash(lhm, key);
     if(lhm->Hash[i] == NULL)
         lhm->Hash[i] = (LinkedList*)malloc(sizeof(LinkedList));
-    if(LL_Insert(lhm->Hash[i], key, value)){
+    if(ll_insert(lhm->Hash[i], key, value)){
         lhm->Size+=1;
         return true;
     }
     return true;
 }
-bool rem(LinkedHashMap *f, int key)
+
+bool lhm_remove(LinkedHashMap *lhm, int key)
 {
-//    int i;
-//    int k = hash(f, key);
-//    for(i =0 ; i<f->MapSize;i++){
-//        int index = (k+i)%f->MapSize;
-//        if(f->Ocupied[index]==false)
-//            return -1;
-//        if(f->Hash[index].key==key)
-//        {
-//            f->Size--;
-//            f->Ocupied[index] = false;
-//        }
-//    }
-    return -1;
+    int i = hash(lhm, key);
+    if(ll_remove(lhm->Hash[i], key)){
+        lhm->Size--;
+        return true;
+    }
+    return false;
 }
-int hash(LinkedHashMap *f, int key){
-    return key % f->MapSize;
-}
+
 void lhm_destroy(LinkedHashMap* lhm){
     int i;
     for(i=0;i<lhm->MapSize;++i){
@@ -142,18 +156,29 @@ void lhm_destroy(LinkedHashMap* lhm){
         free(lhm->Hash[i]);
     }
 }
+
+int hash(LinkedHashMap *f, int key){
+    return key*37 % f->MapSize;
+}
+
 int main(void)
 {
-    LinkedHashMap*lhm;
+    Node* n;
+    LinkedHashMap* lhm;
     lhm = lhm_init(8, 0.5);
     lhm_put(lhm, 4, 21);
     lhm_put(lhm, 20, 24);
     lhm_put(lhm, 36, 25);
     lhm_put(lhm, 5, 26);
     lhm_put(lhm, 4, 26);
-    Node* n = lhm_get(lhm,4);
+    n = lhm_get(lhm,4);
     if(lhm->Size!=4) printf("Wrong size for lhm: expexted %d\t found: %d\n",4,lhm->Size);
+    if(lhm->Hash[4]->size!=3) printf("Wrong size for ll as Hash[4]: expexted 3\t found: %d\n",lhm->Hash[4]->size);
     if(n->value!=26) printf("Wrong value for index 4");
+    bool success = lhm_remove(lhm,20);
+    if(!success) printf("Failed to remove element.");
+    n = lhm_get(lhm,20);
+    if(n!=NULL) printf("Removed element was found.");
     lhm_destroy(lhm);
     hello();
     return 0;
